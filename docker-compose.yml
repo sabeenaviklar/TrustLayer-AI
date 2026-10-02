@@ -1,0 +1,148 @@
+services:
+  mongo:
+    image: mongo:7.0
+    container_name: trustlayer-mongo
+    restart: unless-stopped
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - trustlayer_net
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  ai-service:
+    build:
+      context: ./ai-service
+      dockerfile: Dockerfile
+    container_name: trustlayer-ai-service
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - PORT=8001
+      - CHROMA_PERSIST_DIR=/data/chroma
+      - HF_HOME=/data/models
+      - NLI_MODEL=${NLI_MODEL:-cross-encoder/nli-deberta-v3-small}
+    volumes:
+      - chroma_data:/data/chroma
+      - model_cache:/data/models
+    networks:
+      - trustlayer_net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8001/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 25s
+    deploy:
+      resources:
+        limits:
+          memory: 2048M
+
+  server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: trustlayer-server
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - PORT=5001
+      - MONGO_URI=mongodb://mongo:27017/trustlayer
+      - AI_SERVICE_URL=http://ai-service:8001
+      - UPLOAD_DIR=/app/uploads
+    depends_on:
+      mongo:
+        condition: service_healthy
+      ai-service:
+        condition: service_healthy
+    volumes:
+      - upload_data:/app/uploads
+    networks:
+      - trustlayer_net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:5001/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  client:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-/api}
+        NEXT_PUBLIC_APP_NAME: ${NEXT_PUBLIC_APP_NAME:-TrustLayer}
+        NEXT_PUBLIC_RAZORPAY_KEY_ID: ${NEXT_PUBLIC_RAZORPAY_KEY_ID:-rzp_test_mock_key_trustlayer}
+    container_name: trustlayer-client
+    restart: unless-stopped
+    depends_on:
+      server:
+        condition: service_healthy
+    networks:
+      - trustlayer_net
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:3000/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  nginx:
+    build:
+      context: ./nginx
+      dockerfile: Dockerfile
+    container_name: trustlayer-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      client:
+        condition: service_healthy
+      server:
+        condition: service_healthy
+    networks:
+      - trustlayer_net
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+networks:
+  trustlayer_net:
+    driver: bridge
+
+volumes:
+  mongo_data:
+    name: trustlayer_mongo_data
+  chroma_data:
+    name: trustlayer_chroma_data
+  model_cache:
+    name: trustlayer_model_cache
+  upload_data:
+    name: trustlayer_upload_data

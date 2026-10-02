@@ -1,0 +1,83 @@
+services:
+  mongo:
+    image: mongo:7.0
+    container_name: trustlayer-mongo-dev
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data_dev:/data/db
+    networks:
+      - trustlayer_net_dev
+
+  ai-service:
+    build:
+      context: ./ai-service
+      dockerfile: Dockerfile
+    container_name: trustlayer-ai-service-dev
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./ai-service:/app
+      - chroma_data_dev:/data/chroma
+      - model_cache_dev:/data/models
+    environment:
+      - PORT=8001
+      - ENVIRONMENT=development
+      - LOG_LEVEL=DEBUG
+      - CHROMA_PERSIST_DIR=/data/chroma
+      - HF_HOME=/data/models
+      - NLI_MODEL=cross-encoder/nli-deberta-v3-small
+    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8001", "--reload"]
+    networks:
+      - trustlayer_net_dev
+
+  server:
+    image: node:20-alpine
+    container_name: trustlayer-server-dev
+    working_dir: /app
+    ports:
+      - "5001:5001"
+    volumes:
+      - ./server:/app
+      - /app/node_modules
+      - upload_data_dev:/data/uploads
+    environment:
+      - PORT=5001
+      - NODE_ENV=development
+      - MONGO_URI=mongodb://mongo:27017/trustlayer
+      - AI_SERVICE_URL=http://ai-service:8001
+      - UPLOAD_DIR=/data/uploads
+    command: sh -c "npm install && npm run dev"
+    depends_on:
+      - mongo
+      - ai-service
+    networks:
+      - trustlayer_net_dev
+
+  client:
+    image: node:20-alpine
+    container_name: trustlayer-client-dev
+    working_dir: /app
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./client:/app
+      - /app/node_modules
+      - /app/.next
+    environment:
+      - NODE_ENV=development
+      - NEXT_PUBLIC_API_URL=http://localhost:5001/api
+      - NEXT_PUBLIC_APP_NAME=TrustLayer
+    command: sh -c "npm install && npm run dev"
+    networks:
+      - trustlayer_net_dev
+
+networks:
+  trustlayer_net_dev:
+    driver: bridge
+
+volumes:
+  mongo_data_dev:
+  chroma_data_dev:
+  model_cache_dev:
+  upload_data_dev:
