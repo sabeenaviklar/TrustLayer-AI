@@ -1,20 +1,33 @@
 # TrustLayer 🛡️
 
-> **Enterprise SaaS platform that detects whether AI-generated answers are grounded in your company's source documents and flags hallucinations in real time.**
+> **Enterprise open-source SaaS platform that verifies whether AI-generated answers are grounded in company reference documents and detects hallucinations in real time.**
 
-[![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker&logoColor=white)](https://www.docker.com/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Docker Ready](https://img.shields.io/badge/Docker-Multi--Container-2496ED?logo=docker&logoColor=white)](docker-compose.yml)
+[![CI Workflow](https://img.shields.io/badge/CI-GitHub%20Actions-2088FF?logo=githubactions&logoColor=white)](.github/workflows/ci.yml)
 [![FastAPI](https://img.shields.io/badge/AI%20Service-FastAPI-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 [![Express](https://img.shields.io/badge/Backend-Express%20%2B%20TypeScript-black?logo=node.js&logoColor=white)](https://expressjs.com/)
 [![Next.js](https://img.shields.io/badge/Frontend-Next.js%2014-black?logo=next.js&logoColor=white)](https://nextjs.org/)
 [![ChromaDB](https://img.shields.io/badge/Vector%20Store-ChromaDB-purple)](https://www.trychroma.com/)
+[![Model](https://img.shields.io/badge/NLI%20Model-DeBERTa--v3-orange)](https://huggingface.co/cross-encoder/nli-deberta-v3-small)
 
 ---
 
 ## 📖 Overview
 
-TrustLayer provides automated truth verification and evidence extraction for enterprise AI pipelines. Teams ingest knowledge base documents (PDF, TXT, Markdown), then submit `(question, answer)` pairs through a web dashboard or a high-performance external API.
+As Large Language Models (LLMs) are deployed into production customer support, healthcare, finance, and legal workflows, **hallucinations pose a critical business risk**. 
 
-The scoring pipeline partitions responses into granular claims, retrieves semantically relevant document chunks, runs Natural Language Inference (NLI) cross-encoders to classify each claim as **`SUPPORTED`**, **`CONTRADICTED`**, or **`UNVERIFIABLE`**, highlights the exact supporting evidence sentence, and computes an overall 0–100 reliability score.
+**TrustLayer** is an end-to-end open-source solution that validates LLM responses against your enterprise source-of-truth documents. Teams upload reference documents (PDFs, Markdown, plain text), then submit `(prompt, answer)` pairs through our web dashboard or low-latency REST API.
+
+The pipeline:
+1. **Partitions** the generated AI answer into discrete testable claims at sentence level.
+2. **Retrieves** the most semantically relevant evidence passages from isolated per-workspace ChromaDB vector collections.
+3. **Classifies** each individual claim using Natural Language Inference (NLI) cross-encoders into:
+   - 🟢 **`SUPPORTED`** (Entailment): Directly verified by cited source text.
+   - 🔴 **`CONTRADICTED`** (Contradiction): Directly conflicts with verified source text (Hallucination).
+   - ⚪ **`UNVERIFIABLE`** (Neutral / Out-of-Domain): Cannot be verified from current knowledge base.
+4. **Highlights** the exact supporting sentence from the source document with confidence scores.
+5. **Calculates** an overall 0–100 reliability score and tracks organizational hallucination trends over time.
 
 ---
 
@@ -28,7 +41,7 @@ The scoring pipeline partitions responses into granular claims, retrieves semant
                  ┌────────────────────┴────────────────────┐
                  ▼                                         ▼
       ┌────────────────────┐                    ┌────────────────────┐
-      │  Next.js Frontend  │                    │   Express Server   │ (Node + TS, Port 5001)
+      │  Next.js Frontend  │                    │   Express Server   │ (Node 20 + TS, Port 5001)
       │  (App Router UI)   │                    │   Auth & SaaS API  │
       └────────────────────┘                    └──────────┬─────────┘
                                                            │
@@ -41,208 +54,131 @@ The scoring pipeline partitions responses into granular claims, retrieves semant
                         └────────────────────┘                          └────────────────────┘
 ```
 
-### Tech Stack
-- **Frontend**: Next.js 14 (App Router), TypeScript, Tailwind CSS
-- **Backend API**: Node.js 20, Express, TypeScript, MongoDB (Mongoose), JWT Auth
-- **AI Scoring Engine**: Python 3.11, FastAPI, CPU-optimized PyTorch
-- **Vector Store**: ChromaDB (isolated per workspace collection)
-- **NLI Cross-Encoder**: `cross-encoder/nli-deberta-v3-small` / `roberta-large-mnli` via Hugging Face Transformers
-- **Infrastructure**: Multi-stage Docker containers with Docker Compose & Nginx
-
 ---
 
-## ⚡ Quickstart with Docker Compose
+## ⚡ 1-Minute Quickstart
 
-### 1. Prerequisites
-- [Docker](https://docs.docker.com/get-docker/) (v24+)
-- [Docker Compose](https://docs.docker.com/compose/) (v2.20+)
+Run TrustLayer locally or on any server with a single command:
 
-### 2. Clone and Configure
+### 1. Clone & Configure Environment
 ```bash
 git clone https://github.com/sabeenaviklar/TrustLayer-AI.git
 cd TrustLayer-AI
 
-# Create your local environment file
+# Copy safe default environment configuration
 cp .env.example .env
 ```
 
-### 3. Build & Run
-To build the containers and launch the production stack:
+### 2. Launch All Microservices
 ```bash
-docker compose up -d --build
+docker compose up --build -d
+```
+All containers will build and start with automated healthchecks:
+- **Web Dashboard:** [http://localhost](http://localhost)
+- **REST API:** [http://localhost/api](http://localhost/api)
+- **AI Engine Health:** [http://localhost:8001/health](http://localhost:8001/health)
+
+### 3. Seed Demo Data & Accounts
+Populate your instance with a ready-to-test workspace, pre-ingested reference documents, and historical verification checks:
+```bash
+docker compose exec server npm run seed
 ```
 
-Check service health:
-```bash
-docker compose ps
-```
-
-All services will reach `healthy` status:
-- `trustlayer-mongo`: MongoDB database
-- `trustlayer-ai-service`: FastAPI NLI scoring engine
-- `trustlayer-server`: Express TypeScript SaaS backend
-- `trustlayer-nginx`: Reverse proxy routing requests
+Now open [http://localhost/login](http://localhost/login) in your browser:
+- **Email:** `demo@trustlayer.ai`
+- **Password:** `Password123!`
 
 ---
 
-## 🧪 Testing the Pipeline Live
+## 💳 Usage Limits & Razorpay Billing
 
-### Check Health Status
-```bash
-curl -s http://localhost:8001/health
-```
-
-### Step 1: Ingest a Reference Document
-Upload reference material to a workspace:
-```bash
-curl -s -X POST http://localhost:8001/ingest \
-  -F "workspace_id=demo_workspace" \
-  -F "file=@-;filename=company_overview.txt" << 'EOF'
-TrustLayer is an automated AI hallucination detection platform.
-The company was founded in San Francisco, California in 2024.
-The Free plan includes 100 checks per month, and the Pro plan includes 5000 checks.
-EOF
-```
-
-### Step 2: Test a Supported Answer
-```bash
-curl -s -X POST http://localhost:8001/check \
-  -H "Content-Type: application/json" \
-  -d '{
-    "workspace_id": "demo_workspace",
-    "question": "Where and when was TrustLayer founded?",
-    "answer": "The company was founded in San Francisco, California in 2024."
-  }'
-```
-
-**Output:**
-```json
-{
-  "success": true,
-  "data": {
-    "overall_verdict": "SUPPORTED",
-    "reliability_score": 100.0,
-    "total_claims": 1,
-    "supported_count": 1,
-    "contradicted_count": 0,
-    "unverifiable_count": 0,
-    "claims": [
-      {
-        "claim": "The company was founded in San Francisco, California in 2024.",
-        "verdict": "SUPPORTED",
-        "confidence": 0.9931,
-        "evidence_sentence": "The company was founded in San Francisco, California in 2024."
-      }
-    ]
-  }
-}
-```
-
-### Step 3: Test a Hallucinated / Contradicted Answer
-```bash
-curl -s -X POST http://localhost:8001/check \
-  -H "Content-Type: application/json" \
-  -d '{
-    "workspace_id": "demo_workspace",
-    "question": "Where was TrustLayer founded?",
-    "answer": "TrustLayer was founded in Tokyo, Japan in 1990."
-  }'
-```
-
-**Output:**
-```json
-{
-  "success": true,
-  "data": {
-    "overall_verdict": "CONTRADICTED",
-    "reliability_score": 0.0,
-    "total_claims": 1,
-    "supported_count": 0,
-    "contradicted_count": 1,
-    "claims": [
-      {
-        "claim": "TrustLayer was founded in Tokyo, Japan in 1990.",
-        "verdict": "CONTRADICTED",
-        "confidence": 0.9997,
-        "evidence_sentence": "The company was founded in San Francisco, California in 2024."
-      }
-    ]
-  }
-}
-```
+TrustLayer includes built-in multi-tenant subscription tiers and usage enforcement:
+- **Free Tier:** 100 verification checks / month (default).
+- **Pro Tier:** 5,000 verification checks / month, priority DeBERTa-v3 inference, team collaboration, and API key access.
+- **Razorpay Sandbox / Mock Mode:** Runs out of the box with zero external payment credentials required. Simply click **"Upgrade to Pro"** on the dashboard or `/billing` to simulate an instant upgrade.
+- **Production Payments:** Provide your live or test `RAZORPAY_KEY_ID` and `RAZORPAY_KEY_SECRET` in `.env` to process real credit card, UPI, and net banking transactions.
 
 ---
 
-## 🔑 External API Key Usage
+## 🚀 Public Developer API
 
-External applications can verify model generations by calling `POST /api/v1/check` using an API key (`tl_live_...`):
+TrustLayer allows developers to integrate hallucination verification directly into their LLM inference pipelines (e.g. LangChain, LlamaIndex, OpenAI, Anthropic).
 
+### Verify an Answer via cURL
 ```bash
-curl -X POST http://localhost:5001/api/v1/check \
+curl -X POST http://localhost/api/v1/check \
   -H "Content-Type: application/json" \
   -H "X-API-Key: tl_live_your_api_key_here" \
   -d '{
-    "question": "What is our company refund policy?",
-    "answer": "Customers can request a full refund within 30 days of purchase."
+    "question": "Where is TrustLayer located and what plans are offered?",
+    "answer": "TrustLayer is headquartered in San Francisco, California. The platform offers a Free plan with 100 checks and a Pro plan with 5,000 checks per month."
   }'
 ```
 
+### Sample JSON Response
+```json
+{
+  "success": true,
+  "data": {
+    "overallVerdict": "SUPPORTED",
+    "reliabilityScore": 98.5,
+    "totalClaims": 2,
+    "supportedCount": 2,
+    "contradictedCount": 0,
+    "unverifiableCount": 0,
+    "claims": [
+      {
+        "claim": "TrustLayer is headquartered in San Francisco, California.",
+        "verdict": "SUPPORTED",
+        "confidence": 0.99,
+        "evidenceSentence": "TrustLayer is an enterprise AI safety and compliance SaaS platform founded in 2024 and headquartered in San Francisco, California.",
+        "scores": {
+          "entailment": 0.992,
+          "contradiction": 0.003,
+          "neutral": 0.005
+        }
+      }
+    ]
+  },
+  "error": null
+}
+```
+
 ---
 
-## 🛠️ Running Automated Tests
+## 🛠️ Testing & Quality Assurance
 
-### AI Service Tests (Pytest inside container)
+### Run AI Pipeline Pytest Suite
 ```bash
-docker run --rm trustlayer-ai-service:latest pytest -v tests/
+docker compose exec ai-service pytest tests/ -v
 ```
 
-### Backend Integration Tests
+### Run Backend Build
 ```bash
-docker compose exec server node -e "
-  // runs auth, workspaces, document upload, API keys, and check flow
-"
+docker compose exec server npm run build
+```
+
+### Run Frontend Build
+```bash
+docker compose exec client npm run build
 ```
 
 ---
 
-## 📂 Project Directory Structure
+## 🚢 Production Deployment
 
-```text
-TrustLayer-AI/
-├── docker-compose.yml          # Production container orchestration
-├── docker-compose.dev.yml      # Local dev hot-reload configuration
-├── .env.example                # Sample environment configurations
-├── nginx/                      # Reverse proxy & SSL termination
-│   ├── Dockerfile
-│   ├── nginx.conf
-│   └── conf.d/default.conf
-├── ai-service/                 # FastAPI AI Scoring Microservice
-│   ├── Dockerfile              # Python 3.11 with CPU PyTorch
-│   ├── download_model.py       # Pre-caches model at build time
-│   ├── main.py                 # FastAPI endpoints & lifecycles
-│   ├── schemas.py              # Pydantic data contracts
-│   ├── pipeline/
-│   │   ├── extractor.py        # PDF & TXT text extraction
-│   │   ├── chunker.py          # Sentence tokenizer & chunking
-│   │   ├── vector_store.py     # ChromaDB workspace collections
-│   │   ├── nli.py              # Dynamic NLI label classifier
-│   │   └── checker.py          # Hallucination scoring pipeline
-│   └── tests/                  # Pytest verification suite
-├── server/                     # Node.js + Express Backend
-│   ├── Dockerfile              # Multi-stage TypeScript build
-│   ├── src/
-│   │   ├── config/             # DB & Zod environment validation
-│   │   ├── models/             # Mongoose schemas (User, Workspace, ApiKey, CheckResult, etc.)
-│   │   ├── middleware/         # Auth, workspace RBAC, rate limiting, error handling
-│   │   ├── routes/             # Auth, workspaces, documents, API keys, checks, analytics
-│   │   └── services/           # AI service client & quota tracking
-└── client/                     # Next.js 14 Web Dashboard
-    ├── Dockerfile              # Standalone non-root runner
-    ├── src/app/                # App Router pages & API routes
-    └── tailwind.config.js      # Design system & tokens
-```
+For complete instructions on deploying to an Ubuntu VPS, configuring DNS, and setting up automated Let's Encrypt SSL HTTPS certificates with Certbot:
+
+👉 **[Read the Production Deployment Guide (DEPLOY.md)](DEPLOY.md)**
+
+---
+
+## 🤝 Contributing
+
+We welcome open-source contributions! Please read our **[Contributing Guidelines (CONTRIBUTING.md)](CONTRIBUTING.md)** and review our **[Code of Conduct (CODE_OF_CONDUCT.md)](CODE_OF_CONDUCT.md)** before opening a Pull Request.
 
 ---
 
 ## 📄 License
-MIT License. Built for enterprise reliability and source-grounded AI confidence.
+
+This project is licensed under the [MIT License](LICENSE) - feel free to use and adapt for commercial or personal applications.

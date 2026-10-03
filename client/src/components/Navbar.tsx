@@ -14,6 +14,7 @@ import {
   ChevronDown,
   LogOut,
   Zap,
+  CreditCard,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 
@@ -30,6 +31,7 @@ export function Navbar() {
     { href: '/history', label: 'History', icon: History },
     { href: '/api-keys', label: 'API Keys', icon: Key },
     { href: '/team', label: 'Team', icon: Users },
+    { href: '/billing', label: 'Billing', icon: CreditCard },
   ];
 
   const usage = workspace?.usage;
@@ -117,11 +119,14 @@ export function Navbar() {
           <div className="flex items-center gap-3">
             {/* Quota Progress */}
             {usage && (
-              <div className="hidden lg:flex items-center gap-2.5 px-3 py-1.5 rounded-lg bg-slate-900/80 border border-slate-800 text-xs">
-                <Zap className="w-3.5 h-3.5 text-amber-400" />
+              <Link
+                href="/billing"
+                className="hidden lg:flex items-center gap-2.5 px-3 py-1.5 rounded-lg bg-slate-900/80 hover:bg-slate-900 border border-slate-800 hover:border-slate-700 text-xs transition-all group"
+              >
+                <Zap className="w-3.5 h-3.5 text-amber-400 group-hover:scale-110 transition-transform" />
                 <div className="flex flex-col">
                   <div className="flex items-center justify-between text-[11px] gap-2">
-                    <span className="text-slate-400">Monthly Usage</span>
+                    <span className="text-slate-400 group-hover:text-slate-300">Usage</span>
                     <span className="font-semibold text-slate-200">
                       {usage.checkCount} / {usage.limit}
                     </span>
@@ -135,7 +140,18 @@ export function Navbar() {
                     />
                   </div>
                 </div>
-              </div>
+              </Link>
+            )}
+
+            {/* Quick Upgrade Button if on Free tier */}
+            {workspace?.plan === 'free' && (
+              <Link
+                href="/billing"
+                className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-r from-amber-500/20 to-indigo-500/20 hover:from-amber-500/30 hover:to-indigo-500/30 border border-amber-500/30 text-amber-300 text-xs font-semibold shadow-sm transition-all"
+              >
+                <Zap className="w-3 h-3 text-amber-400" />
+                <span>Upgrade</span>
+              </Link>
             )}
 
             {/* User Profile & Logout */}

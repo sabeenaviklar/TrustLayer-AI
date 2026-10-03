@@ -8,6 +8,7 @@ import { MetricCard } from '@/components/MetricCard';
 import { TrendChart } from '@/components/TrendChart';
 import { VerdictBadge } from '@/components/VerdictBadge';
 import { ClaimBreakdown } from '@/components/ClaimBreakdown';
+import { UpgradeModal } from '@/components/UpgradeModal';
 import {
   ShieldAlert,
   CheckCircle2,
@@ -60,11 +61,12 @@ interface CheckItem {
 }
 
 export default function DashboardOverviewPage() {
-  const { workspace } = useAuth();
+  const { workspace, refreshWorkspace } = useAuth();
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
   const [recentChecks, setRecentChecks] = useState<CheckItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedCheck, setSelectedCheck] = useState<CheckItem | null>(null);
+  const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
 
   const fetchDashboardData = async () => {
     if (!workspace) return;
@@ -120,6 +122,35 @@ export default function DashboardOverviewPage() {
           <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
         </Link>
       </div>
+
+      {/* Free Plan Upgrade Banner */}
+      {workspace?.plan === 'free' && (
+        <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-indigo-950/60 via-slate-900 to-indigo-950/60 border border-indigo-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center shrink-0">
+              <Zap className="w-5 h-5 text-amber-400" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-bold text-white">Starter Plan (100 checks / mo)</p>
+                <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300">
+                  {analytics?.usage?.remaining ?? 0} checks remaining
+                </span>
+              </div>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Upgrade to Pro for 5,000 checks/month, priority NLI processing, and automated API keys.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => setUpgradeModalOpen(true)}
+            className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white font-bold text-xs shadow-lg shadow-indigo-500/20 flex items-center justify-center gap-1.5 transition-all shrink-0"
+          >
+            <Zap className="w-3.5 h-3.5 text-amber-300" />
+            <span>Upgrade to Pro</span>
+          </button>
+        </div>
+      )}
 
       {/* KPI Cards Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
@@ -297,6 +328,15 @@ export default function DashboardOverviewPage() {
           </div>
         </div>
       )}
+
+      <UpgradeModal
+        isOpen={upgradeModalOpen}
+        onClose={() => setUpgradeModalOpen(false)}
+        onSuccess={() => {
+          refreshWorkspace();
+          fetchDashboardData();
+        }}
+      />
     </div>
   );
 }

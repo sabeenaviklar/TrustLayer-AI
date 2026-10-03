@@ -5,6 +5,7 @@ import { useAuth } from '@/context/AuthContext';
 import { api } from '@/lib/api';
 import { ClaimBreakdown } from '@/components/ClaimBreakdown';
 import { VerdictBadge } from '@/components/VerdictBadge';
+import { UpgradeModal } from '@/components/UpgradeModal';
 import {
   Sparkles,
   Send,
@@ -14,6 +15,7 @@ import {
   CheckCircle2,
   AlertTriangle,
   Lightbulb,
+  Zap,
 } from 'lucide-react';
 
 export default function CheckPlaygroundPage() {
@@ -25,6 +27,7 @@ export default function CheckPlaygroundPage() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
+  const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
 
   // Quick test demo templates
   const loadPreset = (type: 'supported' | 'contradicted') => {
@@ -159,9 +162,21 @@ export default function CheckPlaygroundPage() {
             </div>
 
             {error && (
-              <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4 shrink-0" />
-                <span>{error}</span>
+              <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs flex flex-col gap-2">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 shrink-0" />
+                  <span>{error}</span>
+                </div>
+                {(error.toLowerCase().includes('limit') || error.toLowerCase().includes('upgrade')) && (
+                  <button
+                    type="button"
+                    onClick={() => setUpgradeModalOpen(true)}
+                    className="self-start mt-1 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center gap-1.5 transition-all"
+                  >
+                    <Zap className="w-3.5 h-3.5 text-amber-300" />
+                    <span>Upgrade to Pro Now</span>
+                  </button>
+                )}
               </div>
             )}
 
@@ -239,6 +254,15 @@ export default function CheckPlaygroundPage() {
           )}
         </div>
       </div>
+
+      <UpgradeModal
+        isOpen={upgradeModalOpen}
+        onClose={() => setUpgradeModalOpen(false)}
+        onSuccess={() => {
+          refreshWorkspace();
+        }}
+      />
     </div>
   );
 }
+
