@@ -10,16 +10,15 @@ os.environ["CHROMA_PERSIST_DIR"] = temp_dir
 os.environ["ENVIRONMENT"] = "testing"
 
 from main import app
-from pipeline.nli import nli_model
 
 @pytest.fixture(scope="session", autouse=True)
 def init_test_env():
-    # Pre-load NLI model once for test session
-    nli_model.load()
+    # TestClient starts the FastAPI lifespan and loads the NLI model for
+    # integration tests. Direct unit tests can run without downloading it.
     yield
-    # Cleanup temp directory after test session
     if os.path.exists(temp_dir):
         shutil.rmtree(temp_dir, ignore_errors=True)
+
 
 @pytest.fixture
 def client():
