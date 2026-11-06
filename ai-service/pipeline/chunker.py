@@ -1,31 +1,26 @@
 import re
 from typing import List
 
+_ABBREVIATIONS = re.compile(r"\b(?:e\.g|i\.e|etc|mr|mrs|ms|dr|vs|inc|ltd|co|corp)\.", re.IGNORECASE)
+_LIST_MARKER = re.compile(r"^\s*(?:[-*•]|\d+[.)])\s+")
+_SENTENCE_END = re.compile(r"(?<=[.!?])\s+")
+_DOT = "\ue000"  # private-use placeholder for protected abbreviation dots
+
 def split_sentences(text: str) -> List[str]:
     """Splits a block of text into distinct sentences."""
     if not text:
         return []
 
-    # Protect common abbreviations like e.g., i.e., Dr., etc.
-    protected = text
-    abbreviations = ["e.g.", "i.e.", "etc.", "mr.", "mrs.", "ms.", "dr.", "vs.", "inc.", "ltd.", "co.", "corp."]
-    for abbr in abbreviations:
-        pattern = re.compile(re.escape(abbr), re.IGNORECASE)
-        protected = pattern.sub(abbr.replace(".", "___DOT___"), protected)
+    # Protect abbreviations (e.g., Dr., Inc.) from sentence splitting, preserving their casing
+    protected = _ABBREVIATIONS.sub(lambda m: m.group().replace(".", _DOT), text)
 
-    # Split paragraphs first
-    paragraphs = [p.strip() for p in protected.split("\n") if p.strip()]
     sentences = []
-
-    for p in paragraphs:
-        # Clean leading bullet points or numbered lists
-        p_clean = re.sub(r"^[-*•\d+.)]\s*", "", p).strip()
-        # Split on sentence-ending punctuation followed by whitespace or quote
-        raw_splits = re.split(r'(?<=[.!?])\s+', p_clean)
-        for s in raw_splits:
-            restored = s.replace("___DOT___", ".").strip()
-            if len(restored) > 3:
-                sentences.append(restored)
+    for line in protected.split("\n"):
+        line = _LIST_MARKER.sub("", line).strip()
+        for part in _SENTENCE_END.split(line):
+            sentence = part.replace(_DOT, ".").strip()
+            if len(sentence) > 3:
+                sentences.append(sentence)
 
     return sentences
 
@@ -39,47 +34,41 @@ def split_into_claims(answer: str) -> List[str]:
         return [answer.strip()]
     return sentences
 
+def _hard_split(text: str, chunk_size: int, chunk_overlap: int) -> List[str]:
+    """Slices text with no usable break points into overlapping pieces of at most chunk_size."""
+    step = chunk_size - chunk_overlap
+    return [text[i:i + chunk_size] for i in range(0, len(text) - chunk_overlap, step)]
+
 def chunk_document(text: str, chunk_size: int = 500, chunk_overlap: int = 100) -> List[str]:
     """
     Chunks a long document text into overlapping segments respecting sentence / paragraph breaks.
+    Every returned chunk is at most chunk_size characters long.
     """
-    if not text or len(text) <= chunk_size:
-        return [text] if text.strip() else []
+    if not 0 <= chunk_overlap < chunk_size:
+        raise ValueError("chunk_overlap must be >= 0 and smaller than chunk_size")
 
-    paragraphs = text.split("\n\n")
-    chunks: List[str] = []
-    current_chunk = ""
-
-    for paragraph in paragraphs:
-        p = paragraph.strip()
-        if not p:
+    # Break the text into units that each fit in a chunk: paragraphs, then sentences, then raw slices
+    units: List[str] = []
+    for paragraph in re.split(r"\n\s*\n", text or ""):
+        paragraph = paragraph.strip()
+        if len(paragraph) <= chunk_size:
+            units.append(paragraph)
             continue
-            
-        if len(current_chunk) + len(p) + 2 <= chunk_size:
-            current_chunk = f"{current_chunk}\n\n{p}".strip()
-        else:
-            if current_chunk:
-                chunks.append(current_chunk)
-                # Keep tail for overlap
-                overlap_text = current_chunk[-chunk_overlap:] if len(current_chunk) > chunk_overlap else current_chunk
-                current_chunk = f"{overlap_text}\n\n{p}".strip()
-            else:
-                # Paragraph itself exceeds chunk_size, split by sentences
-                sentences = split_sentences(p)
-                for sentence in sentences:
-                    if len(current_chunk) + len(sentence) + 1 <= chunk_size:
-                        current_chunk = f"{current_chunk} {sentence}".strip()
-                    else:
-                        if current_chunk:
-                            chunks.append(current_chunk)
-                            overlap_text = current_chunk[-chunk_overlap:] if len(current_chunk) > chunk_overlap else current_chunk
-                            current_chunk = f"{overlap_text} {sentence}".strip()
-                        else:
-                            # Single sentence larger than chunk_size, slice directly
-                            chunks.append(sentence[:chunk_size])
-                            current_chunk = sentence[chunk_size - chunk_overlap:]
+        for sentence in split_sentences(paragraph):
+            units.extend([sentence] if len(sentence) <= chunk_size else _hard_split(sentence, chunk_size, chunk_overlap))
 
-    if current_chunk and current_chunk not in chunks:
-        chunks.append(current_chunk)
+    # Pack units into chunks, carrying the tail of the previous chunk as overlap when it fits
+    chunks: List[str] = []
+    current = ""
+    for unit in filter(None, units):
+        if current and len(current) + 1 + len(unit) <= chunk_size:
+            current = f"{current}\n{unit}"
+            continue
+        tail = current[max(0, len(current) - chunk_overlap):]
+        if current:
+            chunks.append(current)
+        current = f"{tail}\n{unit}" if tail and len(tail) + 1 + len(unit) <= chunk_size else unit
+    if current:
+        chunks.append(current)
 
     return chunks
