@@ -1,14 +1,34 @@
 import mongoose, { Document, Schema } from 'mongoose';
 
+export interface IUsageReservation {
+  reservationId: string;
+  expiresAt: Date;
+}
+
 export interface IUsageRecord extends Document {
   _id: mongoose.Types.ObjectId;
   workspaceId: mongoose.Types.ObjectId;
-  yearMonth: string; // e.g. "2026-10"
+  yearMonth: string; // e.g. "2026-11"
   checkCount: number;
   limit: number;
+  reservations: IUsageReservation[];
   createdAt: Date;
   updatedAt: Date;
 }
+
+const UsageReservationSchema = new Schema<IUsageReservation>(
+  {
+    reservationId: {
+      type: String,
+      required: true,
+    },
+    expiresAt: {
+      type: Date,
+      required: true,
+    },
+  },
+  { _id: false }
+);
 
 const UsageRecordSchema = new Schema<IUsageRecord>(
   {
@@ -30,6 +50,10 @@ const UsageRecordSchema = new Schema<IUsageRecord>(
     limit: {
       type: Number,
       default: 100,
+    },
+    reservations: {
+      type: [UsageReservationSchema],
+      default: [],
     },
   },
   {

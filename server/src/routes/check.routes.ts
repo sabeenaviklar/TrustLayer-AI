@@ -7,8 +7,8 @@ import { requireWorkspaceMember } from '../middleware/workspaceAccess';
 import { checkLimiter } from '../middleware/rateLimiter';
 import { validate } from '../middleware/validate';
 import { AppError } from '../middleware/errorHandler';
-import { aiServiceClient } from '../services/aiServiceClient';
 import { UsageService } from '../services/usageService';
+import { executeCheck } from '../services/checkExecutionService';
 
 const router = Router();
 
@@ -20,51 +20,6 @@ const checkSchema = z.object({
     regenerate: z.boolean().optional().default(false),
   }),
 });
-
-// Common handler for running check
-async function executeCheck(
-  workspaceId: string,
-  question: string,
-  answer: string,
-  regenerate: boolean,
-  checkedBy: string
-) {
-  // 1. Enforce usage limits and atomically increment
-  await UsageService.checkAndIncrementUsage(workspaceId);
-
-  // 2. Call AI Service pipeline
-  const aiResult = await aiServiceClient.checkAnswer(
-    workspaceId,
-    question,
-    answer,
-    regenerate
-  );
-
-  // 3. Persist CheckResult record in MongoDB
-  const savedRecord = await CheckResult.create({
-    workspaceId: new mongoose.Types.ObjectId(workspaceId),
-    question: aiResult.question,
-    answer: aiResult.answer,
-    overallVerdict: aiResult.overall_verdict,
-    reliabilityScore: aiResult.reliability_score,
-    totalClaims: aiResult.total_claims,
-    supportedCount: aiResult.supported_count,
-    contradictedCount: aiResult.contradicted_count,
-    unverifiableCount: aiResult.unverifiable_count,
-    claims: aiResult.claims.map((c) => ({
-      claim: c.claim,
-      verdict: c.verdict,
-      confidence: c.confidence,
-      evidenceSentence: c.evidence_sentence || null,
-      chunkId: c.chunk_id || null,
-      scores: c.scores,
-    })),
-    checkedBy,
-    selfConsistencyAgreement: aiResult.self_consistency_agreement || null,
-  });
-
-  return savedRecord;
-}
 
 // POST /api/v1/check - Public API endpoint for external applications & API key users
 router.post(
