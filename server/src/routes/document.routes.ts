@@ -164,21 +164,25 @@ router.delete(
         throw new AppError('Document not found in this workspace.', 404, 'NOT_FOUND');
       }
 
-      // Remove from filesystem if exists
+      // Delete vectors first. On AI-service failure, retain the MongoDB record
+      // and uploaded file so the request can be retried without losing metadata.
+      await aiServiceClient.deleteDocument(req.workspaceId!, doc._id.toString());
+
+      await DocumentModel.findByIdAndDelete(doc._id);
+
+      // Remove the local file only after both vector and document deletion succeed.
       const fullPath = path.join(env.UPLOAD_DIR, doc.filename);
       if (fs.existsSync(fullPath)) {
         try {
           fs.unlinkSync(fullPath);
-        } catch (e) {
-          console.warn(`Could not delete file ${fullPath}: ${e}`);
+        } catch (error) {
+          console.warn(`Could not delete file ${fullPath} after document deletion: ${error}`);
         }
       }
 
-      await DocumentModel.findByIdAndDelete(doc._id);
-
       res.status(200).json({
         success: true,
-        data: { message: 'Document deleted successfully.' },
+        data: { message: 'Document and its index deleted successfully.' },
         error: null,
       });
     } catch (error) {

@@ -228,3 +228,28 @@ async def delete_workspace_index(workspace_id: str):
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/document/{workspace_id}/{document_id}", response_model=ApiResponse)
+async def delete_document_index(workspace_id: str, document_id: str):
+    """Deletes all indexed chunks for one document without touching other documents."""
+    if not workspace_id or not workspace_id.strip():
+        raise HTTPException(status_code=400, detail="workspace_id is required.")
+    if not document_id or not document_id.strip():
+        raise HTTPException(status_code=400, detail="document_id is required.")
+
+    try:
+        vector_store.delete_document(workspace_id, document_id)
+        return ApiResponse(
+            success=True,
+            data={"message": "Document index deleted successfully."},
+            error=None
+        )
+    except Exception as e:
+        logger.error(
+            "Failed to delete document '%s' from workspace '%s': %s",
+            document_id,
+            workspace_id,
+            e,
+            exc_info=True,
+        )
+        raise HTTPException(status_code=500, detail="Failed to delete document index.")

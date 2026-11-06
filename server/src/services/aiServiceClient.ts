@@ -124,6 +124,38 @@ export class AIServiceClient {
     }
   }
 
+  async deleteDocument(workspaceId: string, documentId: string): Promise<void> {
+    try {
+      const response = await fetch(
+        `${this.baseUrl}/document/${encodeURIComponent(workspaceId)}/${encodeURIComponent(documentId)}`,
+        { method: 'DELETE' }
+      );
+
+      let json: any = null;
+      try {
+        json = await response.json();
+      } catch {
+        // A successful delete must still return the documented API envelope.
+      }
+
+      if (!response.ok || !json?.success) {
+        const message = json?.error?.message || 'Failed to delete document index in AI service';
+        throw new AppError(
+          message,
+          response.status >= 400 && response.status < 500 ? response.status : 502,
+          'AI_DOCUMENT_DELETE_FAILED'
+        );
+      }
+    } catch (error: any) {
+      if (error instanceof AppError) throw error;
+      throw new AppError(
+        `AI Service connection error during document deletion: ${error.message}`,
+        502,
+        'AI_SERVICE_UNAVAILABLE'
+      );
+    }
+  }
+
   async deleteWorkspace(workspaceId: string): Promise<void> {
     try {
       await fetch(`${this.baseUrl}/workspace/${workspaceId}`, {
