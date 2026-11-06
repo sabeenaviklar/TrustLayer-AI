@@ -37,7 +37,10 @@ class CheckResultData(BaseModel):
     contradicted_count: int
     unverifiable_count: int
     claims: List[ClaimResult]
-    self_consistency_agreement: Optional[float] = None
+    self_consistency_agreement: Optional[float] = Field(
+        None,
+        description="Average share of stance-taking evidence chunks that agree with each claim verdict (0-1); null when unavailable",
+    )
 
 class IngestResultData(BaseModel):
     workspace_id: str
