@@ -4,13 +4,14 @@ import { env } from './env';
 export async function connectDB(): Promise<void> {
   try {
     mongoose.set('strictQuery', true);
+
     await mongoose.connect(env.MONGO_URI, {
       serverSelectionTimeoutMS: 5000,
     });
+
     console.log(`[MongoDB] Connected successfully to ${env.MONGO_URI}`);
   } catch (error) {
-    console.error(`[MongoDB] Initial connection error:`, error);
-    // Don't kill process immediately if waiting on docker compose network startup
+    console.error('[MongoDB] Initial connection error:', error);
     setTimeout(connectDB, 5000);
   }
 }
