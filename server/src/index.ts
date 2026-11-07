@@ -12,6 +12,9 @@ import { aiServiceClient } from './services/aiServiceClient';
 
 const app = express();
 
+// Resolve the real client IP from X-Forwarded-For when running behind a reverse proxy (e.g. Nginx)
+app.set('trust proxy', env.TRUST_PROXY);
+
 // Security and middleware
 app.use(helmet());
 app.use(

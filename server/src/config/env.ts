@@ -6,6 +6,11 @@ dotenv.config();
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('production'),
   PORT: z.coerce.number().default(5001),
+  // Reverse proxies in front of the server: 'false', 'true', a hop count (e.g. '1') or trusted IPs/subnets
+  TRUST_PROXY: z
+    .string()
+    .default('false')
+    .transform((value) => (value === 'true' ? true : value === 'false' ? false : /^\d+$/.test(value) ? Number(value) : value)),
   MONGO_URI: z.string().default('mongodb://mongo:27017/trustlayer'),
   AI_SERVICE_URL: z.string().default('http://ai-service:8001'),
   JWT_SECRET: z.string().min(16, 'JWT_SECRET must be at least 16 characters long'),

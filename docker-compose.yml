@@ -60,6 +60,7 @@ services:
       - MONGO_URI=mongodb://mongo:27017/trustlayer
       - AI_SERVICE_URL=http://ai-service:8001
       - UPLOAD_DIR=/app/uploads
+      - TRUST_PROXY=${TRUST_PROXY:-1}
     depends_on:
       mongo:
         condition: service_healthy
