@@ -136,6 +136,7 @@ router.post(
   '/check',
   checkLimiter,
   authenticateAny,
+  requireWorkspaceMember,
   validate(checkSchema),
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
