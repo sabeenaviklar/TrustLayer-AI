@@ -37,6 +37,8 @@ cp .env.example .env
 ```
 *(The default `.env.example` is fully pre-configured to work out of the box with zero external accounts or payment keys required).*
 
+Optionally, tune how strictly claims are judged with the "Verification Tuning" variables in `.env.example` (for example `SUPPORTED_THRESHOLD`). With the dev compose file, add them under the `ai-service` `environment:` list in `docker-compose.dev.yml`.
+
 ### 3. Spin Up Development Containers
 Use the dedicated development compose file which mounts local source code directories for live hot-reloading:
 ```bash

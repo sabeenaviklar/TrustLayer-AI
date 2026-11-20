@@ -1,37 +1,25 @@
 import logging
-from typing import List, Dict, Any, Optional
+from typing import List
 from schemas import (
     ClaimVerdict,
     NLIScores,
     ClaimResult,
     CheckResultData
 )
+from config import settings
 from pipeline.chunker import split_into_claims, split_sentences
 from pipeline.vector_store import vector_store
 from pipeline.nli import nli_model
 
 logger = logging.getLogger("trustlayer.checker")
 
-def determine_evidence_sentence(chunk_text: str, claim: str) -> Optional[str]:
-    """Finds the most specific sentence inside the chunk that supports or contradicts the claim."""
-    sentences = split_sentences(chunk_text)
-    if not sentences:
-        return chunk_text[:200]
-    
-    # Run fast NLI on individual sentences to pick the most relevant sentence
-    best_sentence = None
-    best_salience = -1.0
-    
-    pairs = [(s, claim) for s in sentences]
-    batch_scores = nli_model.predict_batch(pairs)
-    
-    for s, score in zip(sentences, batch_scores):
-        salience = max(score["entailment"], score["contradiction"])
-        if salience > best_salience:
-            best_salience = salience
-            best_sentence = s
-
-    return best_sentence or sentences[0]
+def _verdict(entailment: float, contradiction: float) -> ClaimVerdict:
+    """Maps NLI scores to a claim verdict using the configured thresholds."""
+    if entailment >= settings.supported_threshold and entailment > contradiction:
+        return ClaimVerdict.SUPPORTED
+    if contradiction >= settings.contradicted_threshold and contradiction > entailment:
+        return ClaimVerdict.CONTRADICTED
+    return ClaimVerdict.UNVERIFIABLE
 
 def check_hallucinations(
     question: str,
@@ -62,10 +50,10 @@ def check_hallucinations(
         all_retrieved = vector_store.query_similar(workspace_id, search_query, top_k=4)
 
         # Filter out chunks that are too semantically distant from the question/claim
-        # ChromaDB L2 distance: <= 1.25 indicates semantic relevance
+        # ChromaDB L2 distance: <= retrieval_max_distance indicates semantic relevance
         retrieved_chunks = [
             c for c in all_retrieved
-            if c.get("distance") is None or c.get("distance", 0.0) <= 1.25
+            if c.get("distance") is None or c.get("distance", 0.0) <= settings.retrieval_max_distance
         ]
 
         if not retrieved_chunks:
@@ -136,17 +124,14 @@ def check_hallucinations(
                     best_chunk_id = chunk_id
                     best_neutral = neut
 
-        # Decision thresholds
-        if best_entailment >= 0.55 and best_entailment > best_contradiction:
-            verdict = ClaimVerdict.SUPPORTED
+        verdict = _verdict(best_entailment, best_contradiction)
+        if verdict == ClaimVerdict.SUPPORTED:
             confidence = best_entailment
             supported_count += 1
-        elif best_contradiction >= 0.50 and best_contradiction > best_entailment:
-            verdict = ClaimVerdict.CONTRADICTED
+        elif verdict == ClaimVerdict.CONTRADICTED:
             confidence = best_contradiction
             contradicted_count += 1
         else:
-            verdict = ClaimVerdict.UNVERIFIABLE
             confidence = max(best_neutral, 0.60)
             best_evidence_sentence = None
             unverifiable_count += 1
@@ -172,17 +157,17 @@ def check_hallucinations(
         reliability_score = 100.0
         overall_verdict = ClaimVerdict.SUPPORTED
     else:
-        # Supported = 100, Unverifiable = 40, Contradicted = 0
+        # Supported = 100, Unverifiable = unverifiable_weight, Contradicted = 0
         score_sum = sum(
             100.0 if c.verdict == ClaimVerdict.SUPPORTED
-            else (40.0 if c.verdict == ClaimVerdict.UNVERIFIABLE else 0.0)
+            else (settings.unverifiable_weight if c.verdict == ClaimVerdict.UNVERIFIABLE else 0.0)
             for c in claim_results
         )
         reliability_score = round(score_sum / total_claims, 1)
 
-        if contradicted_count > 0 or reliability_score < 50.0:
+        if contradicted_count > 0 or reliability_score < settings.verdict_contradicted_cutoff:
             overall_verdict = ClaimVerdict.CONTRADICTED
-        elif reliability_score >= 75.0:
+        elif reliability_score >= settings.verdict_supported_cutoff:
             overall_verdict = ClaimVerdict.SUPPORTED
         else:
             overall_verdict = ClaimVerdict.UNVERIFIABLE
