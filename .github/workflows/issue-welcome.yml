@@ -1,3 +1,4 @@
+
 name: Issue Welcome Comment
 
 on:
@@ -12,28 +13,26 @@ jobs:
   welcome-comment:
     name: Post Welcome Comment
     runs-on: ubuntu-latest
+
     steps:
       - name: Add welcome comment on issue creation
         uses: actions/github-script@v7
         with:
           script: |
-            const issueAuthor = context.payload.issue.user.login;
-
             const body = [
-              `👋 Thanks for opening this issue, @${issueAuthor}!`,
-              '',
-              '### 📋 What happens next?',
-              '- A maintainer will review your issue shortly.',
-              '- Please make sure to attach any relevant context, screenshots, or error logs if applicable.',
-              '- **Open Source Programs:** If you are participating in **Winter of Code Social (WoCS)** or **Nexus Spring of Code (NSoC)**, please mention your program in a comment below!',
-              '- **Important:** Please do not open a Pull Request until a maintainer officially assigns this issue to you!',
-              '',
-              'Thank you for contributing to **TrustLayer AI**! 🚀',
-            ].join('\n');
+              "👋 Thanks for opening this issue!",
+              "",
+              "Hey [@vib3withsimran](https://github.com/vib3withsimran)!",
+              "",
+              "### What happens next?",
+              "- A maintainer will review your issue shortly.",
+              "- Please do not open a Pull Request until a maintainer officially assigns this issue to you!",
+              "- If you have any additional context, screenshots, or error logs, please attach them."
+            ].join("\n");
 
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.payload.issue.number,
-              body,
+              body
             });
